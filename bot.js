@@ -14,29 +14,36 @@ async function enviarAlerta(mensaje) {
 
 async function verificarStock() {
     console.log("Iniciando revisión en All Access...");
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({ 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
     const page = await browser.newPage();
     
+    // Simulamos un User-Agent real de navegador para evitar filtros anti-bot
+    await page.setExtraHTTPHeaders({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+    
     try {
-        await page.goto(URL_OBJETIVO, { timeout: 60000 });
+        await page.goto(URL_OBJETIVO, { timeout: 60000, waitUntil: 'domcontentloaded' });
         
-        // Esperamos a que aparezca el botón principal o cualquier elemento de la tiquetera
-        await page.waitForSelector('body', { timeout: 10000 });
-        
-        // Damos un par de segundos extra para que cargue el contenido dinámico
-        await page.waitForTimeout(5000);
+        // Damos tiempo a que carguen los scripts internos de la tiquetera
+        await page.waitForTimeout(8000);
 
-        // Verificamos si existe el botón de "Comprar entradas" o similar de forma explícita en el DOM
-        const hayBotonCompra = await page.evaluate(() => {
-            const botones = Array.from(document.querySelectorAll('a, button, div'));
-            return botones.some(el => el.innerText && el.innerText.toLowerCase().includes('comprar entradas'));
-        });
+        // Extraemos todo el contenido de texto visible de la página renderizada
+        const contenidoTotal = await page.evaluate(() => document.body.innerText.toLowerCase());
 
-        if (hayBotonCompra) {
-            await enviarAlerta(`¡ALERTA MÁXIMA! Botón de compra detectado para BTS en All Access: ${URL_OBJETIVO}`);
-            console.log("¡Stock o botón detectado! Alerta enviada.");
+        // Verificamos si aparece cualquiera de los indicadores de que hay entradas
+        const hayDisponibilidad = contenidoTotal.includes("sector disponible") || 
+                                  contenidoTotal.includes("ver entradas") || 
+                                  (contenidoTotal.includes("comprar") && !contenidoTotal.includes("agotado"));
+
+        if (hayDisponibilidad) {
+            await enviar_alerta(`¡ALERTA MÁXIMA! Posible stock o entradas detectadas para BTS: ${URL_OBJETIVO}`);
+            console.log("¡Stock detectado! Alerta enviada a Discord.");
         } else {
-            console.log("No se detectó el botón de compra en este momento.");
+            console.log("No se detectó stock disponible en este momento.");
         }
     } catch (e) {
         console.log(`Error durante la ejecución: ${e.message}`);
