@@ -4,10 +4,7 @@ const WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
 const URL_OBJETIVO = "https://www.allaccess.com.ar/event/bts";
 
 async function enviarAlerta(mensaje) {
-    if (!WEBHOOK_URL) {
-        console.log("Error: Falta configurar el DISCORD_WEBHOOK.");
-        return;
-    }
+    if (!WEBHOOK_URL) return;
     await fetch(WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -22,20 +19,24 @@ async function verificarStock() {
     
     try {
         await page.goto(URL_OBJETIVO, { timeout: 60000 });
-        await page.waitForLoadState("networkidle");
+        
+        // Esperamos a que aparezca el botón principal o cualquier elemento de la tiquetera
+        await page.waitForSelector('body', { timeout: 10000 });
+        
+        // Damos un par de segundos extra para que cargue el contenido dinámico
+        await page.waitForTimeout(5000);
 
-        // Buscamos si existe el botón de compra o elementos de sectores disponibles
-        const hayStock = await page.evaluate(() => {
-            const textoBody = document.body.innerText.toLowerCase();
-            // Detecta si aparece algún indicador de sector disponible o botón activo
-            return textoBody.includes("sector disponible") || textoBody.includes("comprar entradas");
+        // Verificamos si existe el botón de "Comprar entradas" o similar de forma explícita en el DOM
+        const hayBotonCompra = await page.evaluate(() => {
+            const botones = Array.from(document.querySelectorAll('a, button, div'));
+            return botones.some(el => el.innerText && el.innerText.toLowerCase().includes('comprar entradas'));
         });
 
-        if (hayStock) {
-            await enviar_alerta(`¡ALERTA MÁXIMA! Hay entradas disponibles para BTS en All Access: ${URL_OBJETIVO}`);
-            console.log("¡Stock detectado y alerta enviada a Discord!");
+        if (hayBotonCompra) {
+            await enviarAlerta(`¡ALERTA MÁXIMA! Botón de compra detectado para BTS en All Access: ${URL_OBJETIVO}`);
+            console.log("¡Stock o botón detectado! Alerta enviada.");
         } else {
-            console.log("No se detectó stock disponible en este momento.");
+            console.log("No se detectó el botón de compra en este momento.");
         }
     } catch (e) {
         console.log(`Error durante la ejecución: ${e.message}`);
