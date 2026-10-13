@@ -18,16 +18,16 @@ async function verificarStock() {
     const page = await browser.newPage();
     
     try {
-        await page.goto(URL_OBJETIVO, { timeout: 60000 });
+        // Usamos domcontentloaded para que no se quede esperando recursos pesados que cuelgan el script
+        await page.goto(URL_OBJETIVO, { timeout: 30000, waitUntil: 'domcontentloaded' });
         
-        // Esperamos a que carguen los elementos de la tiquetera
-        await page.waitForTimeout(10000);
+        // Esperamos unos segundos fijos a que el contenido de JavaScript pinte la pantalla
+        await page.waitForTimeout(6000);
 
-        // Capturamos el texto visible
         const texto = await page.evaluate(() => document.body.innerText);
-        console.log("--- TEXTO CAPTURADO POR EL BOT ---");
-        console.log(texto.substring(0, 500)); // Imprime los primeros 500 caracteres para ver qué lee
-        console.log("----------------------------------");
+        console.log("--- TEXTO CAPTURADO ---");
+        console.log(texto.substring(0, 300));
+        console.log("-----------------------");
 
         const textoLower = texto.toLowerCase();
 
