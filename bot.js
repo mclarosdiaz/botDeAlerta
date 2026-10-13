@@ -1,5 +1,7 @@
+const { chromium } = require('playwright');
+
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK;
-const URL_API = "https://www.allaccess.com.ar/api/event/bts"; // O el endpoint de datos si lo detecta, o vamos directo a simular fetch con headers de navegador real
+const URL_OBJETIVO = "https://www.allaccess.com.ar/event/bts";
 
 async function enviarAlerta(mensaje) {
     if (!WEBHOOK_URL) return;
@@ -11,25 +13,34 @@ async function enviarAlerta(mensaje) {
 }
 
 async function verificarStock() {
-    console.log("Consultando disponibilidad de BTS...");
+    console.log("Iniciando navegador en la nube...");
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    
     try {
-        const respuesta = await fetch("https://www.allaccess.com.ar/event/bts", {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-            }
-        });
-        const html = await respuesta.text();
-        const htmlLower = html.toLowerCase();
+        await page.goto(URL_OBJETIVO, { timeout: 60000 });
+        
+        // Esperamos a que carguen los elementos de la tiquetera
+        await page.waitForTimeout(10000);
 
-        // Como sabemos que cuando hay stock aparece "sector disponible"
-        if (htmlLower.includes("sector disponible") || htmlLower.includes("comprar entradas")) {
-            await enviar_alerta("¡ALERTA MÁXIMA! Hay entradas disponibles para BTS en All Access: https://www.allaccess.com.ar/event/bts");
-            console.log("¡Stock detectado y alerta enviada!");
+        // Capturamos el texto visible
+        const texto = await page.evaluate(() => document.body.innerText);
+        console.log("--- TEXTO CAPTURADO POR EL BOT ---");
+        console.log(texto.substring(0, 500)); // Imprime los primeros 500 caracteres para ver qué lee
+        console.log("----------------------------------");
+
+        const textoLower = texto.toLowerCase();
+
+        if (textoLower.includes("sector disponible") || textoLower.includes("ver entradas")) {
+            await enviar_alerta(`¡ALERTA MÁXIMA! Entradas disponibles para BTS: ${URL_OBJETIVO}`);
+            console.log("¡Alerta enviada a Discord!");
         } else {
-            console.log("No se detectó stock en la respuesta HTML.");
+            console.log("No se detectó stock en la lectura.");
         }
     } catch (e) {
-        console.log(`Error en la petición: ${e.message}`);
+        console.log(`Error: ${e.message}`);
+    } finally {
+        await browser.close();
     }
 }
 
